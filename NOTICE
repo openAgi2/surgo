@@ -1,0 +1,40 @@
+surgo
+Copyright 2026 surgo contributors
+
+This product includes software developed by the surgo contributors,
+licensed under the Apache License, Version 2.0.
+
+================================================================================
+Upstream lineage / 上游血统
+================================================================================
+
+surgo is built on, and vendors source code from, the following open-source
+projects. Both are licensed under the Apache License, Version 2.0.
+
+1. TradingAgents — Tauric Research
+   https://github.com/TauricResearch/TradingAgents
+   Copyright (c) Tauric Research and contributors.
+   The multi-agent trading framework that surgo's engine (the vendored
+   `tradingagents/` package and `cli/` package) is derived from.
+   Reference paper: "TradingAgents: Multi-Agents LLM Financial Trading
+   Framework" (arXiv:2412.20138).
+
+2. TradingAgents-CN — hsliuping and TradingAgents-CN contributors
+   https://github.com/hsliuping/TradingAgents-CN
+   Copyright (c) hsliuping and TradingAgents-CN contributors.
+   surgo draws on the Apache-2.0-licensed open-source engine of
+   TradingAgents-CN (its `tradingagents/` directory) for A-share market
+   adaptation. Only the Apache-2.0-licensed components of TradingAgents-CN
+   are used; the proprietary components of that project (its `app/`,
+   `frontend/`, and `core/` directories) are NOT used, copied, or
+   redistributed here.
+
+The full text of the Apache License, Version 2.0, is in the LICENSE file.
+The upstream TradingAgents license is preserved in
+LICENSE.upstream-tradingagents.
+
+surgo is an independent project and is not affiliated with, endorsed by, or
+sponsored by Tauric Research or the TradingAgents-CN authors. "TradingAgents"
+and "TradingAgents-CN" are the names of their respective upstream projects and
+are referenced here solely to describe origin, as permitted by Section 6 of the
+Apache License, Version 2.0.
