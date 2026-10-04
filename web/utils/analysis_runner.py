@@ -172,10 +172,21 @@ def run_stock_analysis(
 
     except Exception as exc:
         logger.exception("web analysis failed")
+        message = f"{type(exc).__name__}: {exc}"
+        if "null value for 'choices'" in message:
+            # An OpenAI-protocol endpoint answered with an error body (Zhipu's
+            # gateway does this for e.g. coding-plan keys without balance on
+            # the standard endpoint); the server's own reason is lost inside
+            # the SDK, so point at the known configuration cause.
+            message += (
+                " —— 服务端返回了错误体而非补全结果。若你用的是 GLM Coding Plan "
+                "套餐 key：请在侧边栏选「GLM Coding Plan」提供商（走 Anthropic "
+                "兼容端点），标准 OpenAI 端点对套餐 key 不开放。"
+            )
         return {
             **base,
             "success": False,
-            "error": f"{type(exc).__name__}: {exc}",
+            "error": message,
             "state": {},
             "decision": None,
             "duration_seconds": round(time.time() - t0, 1),

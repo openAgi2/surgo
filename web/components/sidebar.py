@@ -18,11 +18,33 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients.model_catalog import get_model_options
 from web.utils.api_checker import check_api_keys, get_api_key_status_message
 
+# A web-side pseudo-provider: the GLM Coding Plan key only has quota on the
+# Anthropic-compatible endpoint, so this choice maps to provider "anthropic"
+# + that endpoint while still offering the GLM model catalog.
+CODING_PLAN = "glm-coding-plan"
+CODING_PLAN_BACKEND = "https://api.z.ai/api/anthropic"
 
-def _provider_names() -> list[str]:
-    from cli.prompts import _llm_provider_table
 
-    return [key for _, key, _ in _llm_provider_table()]
+def resolve_provider(choice: str) -> tuple[str, str, str | None]:
+    """(engine provider, catalog provider, default backend) for a sidebar choice.
+
+    Pure function so the mapping is testable without streamlit.
+    """
+    if choice == CODING_PLAN:
+        return "anthropic", "glm", CODING_PLAN_BACKEND
+    return choice, choice, None
+
+
+def _default_provider_choice() -> str:
+    """Preselect the coding-plan pseudo-provider when .env pins that setup."""
+    backend = DEFAULT_CONFIG.get("backend_url") or ""
+    if (
+        DEFAULT_CONFIG["llm_provider"] == "anthropic"
+        and "/anthropic" in backend
+        and str(DEFAULT_CONFIG["quick_think_llm"]).startswith("glm-")
+    ):
+        return CODING_PLAN
+    return DEFAULT_CONFIG["llm_provider"]
 
 
 def _model_pick(provider: str, mode: str, current: str) -> str:
@@ -50,34 +72,52 @@ def render_sidebar() -> dict:
     st.sidebar.title("⚙️ surgo 控制台")
 
     # -- LLM 配置（本次会话覆盖；持久配置走 .env） ----------------------------
+    from cli.prompts import _llm_provider_table
+
     with st.sidebar.expander("🧠 LLM 配置", expanded=True):
-        providers = _provider_names()
-        current_provider = st.session_state.get("sb_provider", DEFAULT_CONFIG["llm_provider"])
+        engine_providers = _llm_provider_table()
+        providers = [CODING_PLAN, *[key for _, key, _ in engine_providers]]
+        current_provider = st.session_state.get("sb_provider", _default_provider_choice())
         if current_provider not in providers:
             providers = [current_provider, *providers]
-        provider = st.selectbox("LLM 提供商", providers,
-                                index=providers.index(current_provider), key="sb_provider")
+        provider = st.selectbox(
+            "LLM 提供商",
+            providers,
+            index=providers.index(current_provider),
+            key="sb_provider",
+            format_func=lambda p: "GLM Coding Plan（智谱套餐 · Anthropic 端点）" if p == CODING_PLAN else p,
+        )
+        engine_provider, catalog_provider, default_backend = resolve_provider(provider)
 
-        quick = _model_pick(provider, "quick", st.session_state.get(
+        if provider in ("glm", "glm-cn"):
+            st.caption(
+                "⚠️ GLM Coding Plan 套餐 key 在标准 OpenAI 端点上会报余额不足/空响应——"
+                "套餐用户请选列表第一项 GLM Coding Plan"
+            )
+
+        quick = _model_pick(catalog_provider, "quick", st.session_state.get(
             "sb_quick_model", DEFAULT_CONFIG["quick_think_llm"]))
-        deep = _model_pick(provider, "deep", st.session_state.get(
+        deep = _model_pick(catalog_provider, "deep", st.session_state.get(
             "sb_deep_model", DEFAULT_CONFIG["deep_think_llm"]))
         backend = st.text_input(
             "API 端点（backend_url）",
-            value=st.session_state.get("sb_backend", DEFAULT_CONFIG.get("backend_url") or ""),
+            value=st.session_state.get(
+                "sb_backend",
+                default_backend or DEFAULT_CONFIG.get("backend_url") or "",
+            ),
             key="sb_backend",
             help="留空用该提供商默认端点；.env 里的 TRADINGAGENTS_LLM_BACKEND_URL 是持久配置",
         )
         st.session_state["sb_quick_model"] = quick
         st.session_state["sb_deep_model"] = deep
 
-        if provider != DEFAULT_CONFIG["llm_provider"] or quick != DEFAULT_CONFIG["quick_think_llm"]:
+        if engine_provider != DEFAULT_CONFIG["llm_provider"] or quick != DEFAULT_CONFIG["quick_think_llm"]:
             st.caption("⚠️ 以上为本次会话的覆盖值；持久配置请写入 .env（TRADINGAGENTS_*）")
 
     # -- API key 状态 ----------------------------------------------------------
     with st.sidebar.expander("🔑 API Key 状态", expanded=False):
-        status = check_api_keys(provider)
-        st.markdown(get_api_key_status_message(provider))
+        status = check_api_keys(engine_provider)
+        st.markdown(get_api_key_status_message(engine_provider))
         for var, info in status["details"].items():
             mark = "✅" if info["configured"] else "❌"
             req = "必填" if info["required"] else "可选"
@@ -94,8 +134,8 @@ def render_sidebar() -> dict:
         st.caption(f"缓存目录: `{DEFAULT_CONFIG['data_cache_dir']}`")
 
     return {
-        "llm_provider": provider,
+        "llm_provider": engine_provider,
         "llm_model": quick,
         "deep_model": deep,
-        "backend_url": backend or None,
+        "backend_url": backend or default_backend,
     }
