@@ -43,6 +43,20 @@ ANALYST_NODE_SPECS: dict[str, AnalystNodeSpec] = {
         report_key="fundamentals_report",
         tools=fundamentals_analyst.TOOLS,
     ),
+    "index": AnalystNodeSpec(
+        # A-share broad-market context. Self-contained (no tools);
+        # pre-fetches index data and injects it into the prompt.
+        key="index",
+        agent_node="Index Analyst",
+        report_key="index_report",
+    ),
+    "sector": AnalystNodeSpec(
+        # A-share industry-board analysis. Self-contained (no tools);
+        # pre-fetches sector data and injects it into the prompt.
+        key="sector",
+        agent_node="Sector Analyst",
+        report_key="sector_report",
+    ),
 }
 
 

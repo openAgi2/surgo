@@ -12,11 +12,13 @@ from tradingagents.agents import (
     create_bull_researcher,
     create_conservative_debator,
     create_fundamentals_analyst,
+    create_index_analyst,
     create_market_analyst,
     create_neutral_debator,
     create_news_analyst,
     create_portfolio_manager,
     create_research_manager,
+    create_sector_analyst,
     create_sentiment_analyst,
     create_trader,
 )
@@ -125,6 +127,8 @@ class GraphSetup:
             "social": lambda: create_sentiment_analyst(self.quick_thinking_llm),
             "news": lambda: create_news_analyst(self.quick_thinking_llm),
             "fundamentals": lambda: create_fundamentals_analyst(self.quick_thinking_llm),
+            "index": lambda: create_index_analyst(self.quick_thinking_llm),
+            "sector": lambda: create_sector_analyst(self.quick_thinking_llm),
         }
 
         bull_researcher_node = create_bull_researcher(self.quick_thinking_llm)

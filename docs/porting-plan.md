@@ -85,11 +85,38 @@
     （point-in-time 安全输入）照常给出
 - 接入：`router.py` 的 `_ASHARE_METHODS` 增加 5 个财务方法，A 股符号自动短路
 
-### M4 — A 股特色分析师（可选增强）
-- [ ] 大盘分析师（index analyst）
-- [ ] 板块分析师（sector analyst）
-- [ ] 中文社媒/舆情分析师（替代 StockTwits/Reddit 路径）
-- 参考 CN `tradingagents/agents/analysts/`，但重写成挂到 surgo 引擎的干净实现
+### M4 — A 股特色分析师 ✅ 已完成
+- [x] 大盘分析师（index analyst）— 自包含（无 tool 调用），预取 A 股五大指数
+  近期表现 + THS 行业板块快照，注入 prompt 由 LLM 分析
+  - 新增 `vendors/ashare/overview.py`：`get_market_overview(symbol, trade_date)`
+    预取上证/深证/创业板/沪深300/中证500 指数收盘价及 5D/20D 涨跌幅，
+    以及 THS 行业板块快照（涨跌幅排名、资金净流入）
+  - 新增 `agents/analysts/index_analyst.py`：预取数据注入 prompt，LLM 输出
+    大盘环境报告（趋势判断、市场宽度、风险等级），非 A 股符号返回
+    not-applicable sentinel
+- [x] 板块分析师（sector analyst）— 自包含（无 tool 调用），预取板块分类与
+  板块指数数据
+  - 新增 `vendors/ashare/sectors.py`：`get_sector_info(symbol, trade_date)`
+    预取股票 THS 行业板块归属（通过 cninfo 证监会行业分类 → 关键词匹配 THS
+    90 个行业板块；匹配失败时尝试主营业务描述二次匹配）、板块表现快照、
+    板块指数近 10 期 OHLCV
+  - 新增 `agents/analysts/sector_analyst.py`：预取数据注入 prompt，LLM 输出
+    板块轮动与同业对比报告，非 A 股符号返回 not-applicable sentinel
+- [x] 中文社媒/舆情分析师（替代 StockTwits/Reddit 路径）
+  - 实测：东方财富股吧/雪球/微博等中文社交平台无 clean、tokenless 的公开
+    API 可用，不可移植。现有 sentiment analyst 对 A 股符号已可降级运作：
+    `get_news` 走 M5 中文新闻路径（✅），StockTwits/Reddit 对 A 股代码自然
+    返回 unavailable 占位（✅），analyst 输出基于新闻的情绪判断但无社交数据。
+    诚实降级优于伪造数据。
+- 参考 CN `tradingagents/agents/analysts/`，重写为挂到 surgo 引擎的干净实现：
+  - CN 的 index/sector analyst 走 `core.tools.*`（专有层，不可移植），采用
+    自包含模式（预取数据+LLM 解读，无 tool 调用）。本实现沿用自包含模式但
+    数据层用 `vendors/ashare/` 的 tokenless 源（THS 行业板块指数、cninfo 分类），
+    零 `app/`/`core/` 依赖
+  - 新增 analyst 通过 `AnalystType` 枚举、`ANALYST_NODE_SPECS`、
+    `analyst_factories`、`AgentState` 报告键、researchers prompt 注入、
+    CLI 选择菜单完整接入；非 A 股运行时两大 analyst 返回 not-applicable
+    sentinel，不影响美股/加密货币运行
 
 ### M5 — 中文财经新闻 ✅ 已完成
 - [x] 从 CN `tradingagents/dataflows/news/` 提取中文新闻源（借鉴其源选型思路，重写为干净实现）

@@ -19,6 +19,8 @@ ANALYST_CHOICES = [
     ("Sentiment Analyst", AnalystType.SOCIAL),
     ("News Analyst", AnalystType.NEWS),
     ("Fundamentals Analyst", AnalystType.FUNDAMENTALS),
+    ("Index Analyst (A-share)", AnalystType.INDEX),
+    ("Sector Analyst (A-share)", AnalystType.SECTOR),
 ]
 
 CRYPTO_SUFFIXES = ("-USD", "-USDT", "-USDC", "-BTC", "-ETH")

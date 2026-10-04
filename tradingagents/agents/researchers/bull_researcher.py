@@ -19,6 +19,8 @@ def create_bull_researcher(llm):
         sentiment_report = report_or_absent(state["sentiment_report"], "sentiment")
         news_report = report_or_absent(state["news_report"], "news")
         fundamentals_report = report_or_absent(state["fundamentals_report"], "fundamentals")
+        index_report = report_or_absent(state.get("index_report", ""), "index")
+        sector_report = report_or_absent(state.get("sector_report", ""), "sector")
         instrument_context = get_instrument_context_from_state(state)
         asset_type = state.get("asset_type", "stock")
         target_label = "stock" if asset_type == "stock" else "asset"
@@ -27,6 +29,13 @@ def create_bull_researcher(llm):
             if asset_type == "stock"
             else "Asset fundamentals report (may be unavailable for crypto)"
         )
+
+        # A-share-specific reports are only shown when they contain data
+        ashare_reports = ""
+        if index_report and "not available" not in index_report.lower()[:60]:
+            ashare_reports += f"\nBroad-market A-share index report: {index_report}"
+        if sector_report and "not available" not in sector_report.lower()[:60]:
+            ashare_reports += f"\nSector/industry board report: {sector_report}"
 
         prompt = f"""You are a Bull Analyst advocating for investing in the {target_label}. Your task is to build a strong, evidence-based case emphasizing growth potential, competitive advantages, and positive market indicators. Leverage the provided research and data to address concerns and counter bearish arguments effectively.
 
@@ -42,7 +51,7 @@ Resources available:
 Market research report: {market_research_report}
 Social media sentiment report: {sentiment_report}
 Latest world affairs news: {news_report}
-{fundamentals_label}: {fundamentals_report}
+{fundamentals_label}: {fundamentals_report}{ashare_reports}
 Conversation history of the debate: {history}
 Last bear argument: {current_response}
 Use this information to deliver a compelling bull argument, refute the bear's concerns, and engage in a dynamic debate that demonstrates the strengths of the bull position.
