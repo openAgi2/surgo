@@ -34,10 +34,9 @@
 - [x] 依赖：在 `pyproject.toml` 增加 `tushare` / `akshare` / `baostock`
 
 > M1 范围说明（按 handoff 退路收紧）：只做行情 + 技术指标 + 回测结算数据路径。
-> 基本面/财务（M3）、中文新闻（M5）、实时快照工具未实现，A 股符号调用这些方法时
-> 走既有链或返回明确 sentinel，不伪造数据。数据层已端到端验证（600519/000001.SZ/300750
-> 均可取数、point-in-time 过滤正确、指标计算正确、AAPL 无回归）；完整 `surgo --ticker
-> 600519 --date <D>` 报告需配置 LLM API key 后运行。
+> 基本面/财务（M3）、中文新闻（M5）后续 milestone 已补齐；数据层已端到端验证
+> （600519/000001.SZ/300750 均可取数、point-in-time 过滤正确、指标计算正确、AAPL 无回归）；
+> 完整 `surgo --ticker 600519 --date <D>` 报告需配置 LLM API key 后运行。
 
 > **eastmoney 为何被排除（不要踩第二次，2026-10-04 实测）**：akshare 默认的
 > A 股日线源 eastmoney（`push2his.eastmoney.com` / `push2.eastmoney.com` 的
@@ -92,9 +91,29 @@
 - [ ] 中文社媒/舆情分析师（替代 StockTwits/Reddit 路径）
 - 参考 CN `tradingagents/agents/analysts/`，但重写成挂到 surgo 引擎的干净实现
 
-### M5 — 中文财经新闻
-- [ ] 从 CN `tradingagents/dataflows/news/chinese_finance.py` 等提取中文新闻源
-- [ ] 接入 news analyst 工具链
+### M5 — 中文财经新闻 ✅ 已完成
+- [x] 从 CN `tradingagents/dataflows/news/` 提取中文新闻源（借鉴其源选型思路，重写为干净实现）
+  - CN 的 `chinese_finance.py` 实测是**模拟数据骨架**（`_search_finance_news` 返回硬编码示例、
+    股吧/媒体两路直接返回零置信度占位），无真实取数逻辑可移植；`realtime_news.py` 走
+    Finnhub/AlphaVantage/NewsAPI 美股源 + 中文源聚合，但 `stock_info_global_cls`（财联社）
+    与 `stock_news_main_cx`（财新）在本机**挂死不返回**（与 eastmoney kline 同款失败模式）。
+  - 因此源选型实测重定：**个股新闻** `ak.stock_news_em`（eastmoney 搜索接口，本机可达，
+    每股最近 ~100 条，带分钟级发布时间）；**宏观快讯** `ak.stock_info_global_ths`（同花顺 7x24）
+    降级 `ak.stock_info_global_sina`（新浪 7x24），均带时间戳、无需 token
+- [x] 接入 news analyst 工具链
+  - 新增 `vendors/ashare/news.py`：`get_news`（个股，按发布时间过滤窗口）与
+    `get_global_news`（中文宏观快讯，按 lookback 窗口过滤、去重、截断到 limit）
+  - **point-in-time 按发布时间戳**：文章只在 `发布时间 <= 窗口结束日` 时可见（实测：窗口止于
+    09-27 时 09-28 的段永平报道不可见）；无法解析时间戳的行仅在非历史运行保留（对齐
+    `date_window.in_window` 的 undated 规则 #1126）
+  - 滚动窗口 feed 语义：窗口早于 feed 覆盖范围时返回 `coverage_gap` sentinel（「不是没有新闻，
+    是 feed 够不到」），窗口在覆盖内但无文章时才返回 NO_DATA（真实缺席）
+  - 路由：`get_news` 走 `_ASHARE_METHODS` 符号短路（args[0] 即 ticker）；`get_global_news`
+    的首参是日期，工具层注入 `company_of_interest` 为 `symbol` kwarg 供路由门识别——
+    langgraph 的 `_inject_tool_args` 会剥离 LLM 自带的值再注入 state 值，模型无法伪造
+    symbol 绕过 A-share 路由（已读源码确认）
+  - 实测：600519/300750 个股新闻可取（真实文章）；中文宏观快讯可取（商务部 G20 答记者问等）；
+    AAPL get_news/get_global_news 仍走 yfinance 无回归；ruff 通过；无 app/core 依赖
 
 ## 验收标准（每个 milestone）
 

@@ -28,6 +28,10 @@ from tradingagents.dataflows.vendors.ashare.market import (
     get_indicators as get_ashare_indicators,
     get_stock_data as get_ashare_stock_data,
 )
+from tradingagents.dataflows.vendors.ashare.news import (
+    get_global_news as get_ashare_global_news,
+    get_news as get_ashare_news,
+)
 from tradingagents.dataflows.vendors.ashare.symbols import is_ashare
 from tradingagents.dataflows.vendors.fred import get_macro_data as get_fred_macro_data
 from tradingagents.dataflows.vendors.polymarket import (
@@ -181,6 +185,8 @@ _ASHARE_METHODS = {
     "get_cashflow": get_ashare_cashflow,
     "get_income_statement": get_ashare_income_statement,
     "get_insider_transactions": get_ashare_insider_transactions,
+    "get_news": get_ashare_news,
+    "get_global_news": get_ashare_global_news,
 }
 
 
@@ -227,9 +233,12 @@ def no_data_available(error: NoMarketDataError) -> str:
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
     # A-share symbols short-circuit to the A-share vendor for the methods it
-    # serves. The first positional argument is the symbol for every routed
-    # method, so this check needs no signature knowledge.
-    if method in _ASHARE_METHODS and args and is_ashare(args[0]):
+    # serves. For most methods the first positional argument is the symbol;
+    # ``get_global_news`` takes a date there instead and carries the symbol in
+    # its ``symbol`` keyword (injected from graph state by the tool layer), so
+    # the gate reads the right one either way.
+    symbol = kwargs.pop("symbol", None) if method == "get_global_news" else (args[0] if args else None)
+    if method in _ASHARE_METHODS and symbol and is_ashare(symbol):
         try:
             return _ASHARE_METHODS[method](*args, **kwargs)
         except NoMarketDataError as e:

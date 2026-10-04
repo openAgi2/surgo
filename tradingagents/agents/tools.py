@@ -190,6 +190,7 @@ def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     look_back_days: Annotated[int | None, "Days to look back; omit to use the configured default"] = None,
     limit: Annotated[int | None, "Max articles to return; omit to use the configured default"] = None,
+    symbol: Annotated[str, InjectedState("company_of_interest")] = "",
     trade_date: Annotated[str, InjectedState("trade_date")] = "",
 ) -> str:
     """
@@ -206,7 +207,12 @@ def get_global_news(
     Returns:
         str: A formatted string containing global news data
     """
-    return route_to_vendor("get_global_news", as_of(curr_date, trade_date), look_back_days, limit)
+    # ``symbol`` is injected from graph state so the router can pick a
+    # market-appropriate macro feed (a Chinese wire for an A-share symbol) even
+    # though this method's own positional argument is a date, not a ticker.
+    return route_to_vendor(
+        "get_global_news", as_of(curr_date, trade_date), look_back_days, limit, symbol=symbol
+    )
 
 
 @tool
