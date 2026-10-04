@@ -100,6 +100,16 @@ def build_engine_config(
     config["max_risk_discuss_rounds"] = risk
     if output_language:
         config["output_language"] = output_language
+    # GLM 4.6+ are thinking models: without an explicit budget the Anthropic
+    # client defaults to max_tokens=1024, which extended thinking consumes
+    # before any report text is generated. Give them room unless configured.
+    # (An env override lands as a string when the built-in default is None.)
+    mt = config.get("max_tokens")
+    if isinstance(mt, str) and mt.strip().isdigit():
+        config["max_tokens"] = int(mt)
+        mt = config["max_tokens"]
+    if mt is None and str(llm_model).startswith("glm-"):
+        config["max_tokens"] = 8192
     return config
 
 
