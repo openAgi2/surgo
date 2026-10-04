@@ -49,6 +49,13 @@
 > 直连路径上同样生效）。因此降级链定为 sina → tencent → baostock → tushare，全部实测可达、
 > 无需代理。若后续要把 eastmoney 加回首选，前提是其代理节点已调稳，否则会给链上引入
 > 一个必败且拖慢整条链的源。
+>
+> **2026-10-04 更新**：eastmoney kline 可达性**随时间波动**（间歇性可达——同一台机器
+> curl/requests 直连时通时断，与代理节点切换相关）。已将其加回降级链 **sina 之后**作为
+> 机会性源（`common.py` 的 `_fetch_eastmoney`，手写直连请求 + 系统代理 fallback）：
+> sina 稳定时用不到它；sina 失败且它可达时享受其更全字段（换手率/振幅）；不可达时
+> 降级链继续走 tencent/baostock，不拖慢主路径。注意 eastmoney 的**财务**接口
+> （`*_by_report_em`）走不同主机，稳定可达，M3 三表依赖它。
 
 ### M2 — A 股代码与交易日历 ✅ 已完成
 - [x] A 股代码识别与归一化（`600519.SH` / `000001.SZ` / 6 位简码）— 在 M1 `vendors/ashare/symbols.py` 落地
@@ -62,9 +69,22 @@
     与美股周末行为一致
   - 实测：2025 国庆假期（10-01..10-08）全部正确判为非交易日，grid 从 15 天收敛到 5 个交易日
 
-### M3 — A 股基本面与财务
-- [ ] 财务三表 / 主要指标（替代 SEC EDGAR 路径）
-- [ ] 保留原版的「as-filed / point-in-time」语义：按分析日期只取当时已披露的财报
+### M3 — A 股基本面与财务 ✅ 已完成
+- [x] 财务三表 / 主要指标（替代 SEC EDGAR 路径）
+  - 新增 `vendors/ashare/fundamentals.py`：三表走 akshare eastmoney 财务接口
+    （`stock_{balance,profit,cash_flow}_sheet_by_report_em`，本机可达、无需 token），
+    精简为标准财务列（营收/净利/总资产/总负债/经营现金流等）
+  - 公司概况走 cninfo（`stock_profile_cninfo`，现状快照）；估值（市值/PE TTM）本地算：
+    `close × outstanding_share`（M1 sina 行情）÷ 已披露归母净利 TTM
+  - insider transactions：可达的 A 股端点无披露日字段，返回明确 sentinel（不伪造）
+- [x] 保留原版的「as-filed / point-in-time」语义：按分析日期只取当时已披露的财报
+  - eastmoney 三表自带 `NOTICE_DATE`（实际公告日）——比 Yahoo 路径更强：Yahoo 无披露日，
+    历史日期只能整体 withhold；A 股路径可按公告日逐行过滤，真正做到 as-filed
+  - 实测公告日矩阵：as_of 2025-04-15→见 2024年报（4-03 披露）、2025-05-01→见一季报
+    （4-30 披露）、2025-10-30→见三季报（当天披露）；公告日当天可见、前一天不可见
+  - 历史日期概况字段（cninfo 现状快照）按 `is_historical` withhold；估值字段
+    （point-in-time 安全输入）照常给出
+- 接入：`router.py` 的 `_ASHARE_METHODS` 增加 5 个财务方法，A 股符号自动短路
 
 ### M4 — A 股特色分析师（可选增强）
 - [ ] 大盘分析师（index analyst）

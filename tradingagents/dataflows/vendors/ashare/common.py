@@ -43,6 +43,29 @@ _SINA_COLUMNS = {
     "volume": "Volume",
 }
 
+# eastmoney's kline endpoint returns Chinese headers with a different spelling
+# than sina's; map the OHLCV columns the same way.
+_EM_COLUMNS = {
+    "日期": "Date",
+    "开盘": "Open",
+    "最高": "High",
+    "最低": "Low",
+    "收盘": "Close",
+    "成交量": "Volume",
+}
+
+
+def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename an upstream frame's date/OHLCV columns to the engine's contract."""
+    out = df.copy()
+    for c in out.columns:
+        key = str(c).lower()
+        if key in _SINA_COLUMNS:
+            out = out.rename(columns={c: _SINA_COLUMNS[key]})
+        elif c in _EM_COLUMNS:
+            out = out.rename(columns={c: _EM_COLUMNS[c]})
+    return out
+
 
 class AShareNotConfiguredError(VendorNotConfiguredError):
     """A tushare call was attempted without TUSHARE_TOKEN set."""
@@ -69,7 +92,7 @@ def _finalize(df: pd.DataFrame, symbol: str, canonical: str) -> pd.DataFrame:
     if df is None or df.empty:
         raise NoMarketDataError(symbol, canonical, "no price rows")
 
-    out = df.rename(columns={c: _SINA_COLUMNS.get(str(c).lower(), c) for c in df.columns})
+    out = _normalize_columns(df)
     if "Date" not in out.columns:
         raise NoMarketDataError(symbol, canonical, f"no date column in {list(df.columns)}")
 
@@ -86,6 +109,48 @@ def _finalize(df: pd.DataFrame, symbol: str, canonical: str) -> pd.DataFrame:
     if out.empty:
         raise NoMarketDataError(symbol, canonical, "no rows with a closing price")
     return out
+
+
+def _fetch_eastmoney(symbol: str, start_date: str, end_date: str, adjust: str) -> pd.DataFrame:
+    """Daily bars from eastmoney's kline endpoint, requested directly.
+
+    eastmoney's kline is the richest A-share source (turnover, amplitude, etc.)
+    and needs no token. Its host is SNI-blocked on some networks and reachable
+    on others, and the working path (direct vs system proxy) varies — so the
+    request is hand-built (rather than via akshare, which always uses the
+    ambient proxy) and tried direct first, then through the system proxy. It is
+    placed after sina in the chain so the stable path never pays its failure cost.
+    """
+    import requests
+
+    fqt = {"qfq": "1", "hfq": "2", "": "0"}.get(adjust, "1")
+    secid = f"{'1' if to_sina(symbol).startswith('sh') else '0' if to_sina(symbol).startswith('sz') else '0'}.{to_sina(symbol)[2:]}"
+    params = {
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f116",
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "klt": "101", "fqt": fqt, "secid": secid,
+        "beg": start_date.replace("-", ""), "end": end_date.replace("-", ""),
+    }
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    rows = None
+    for session in (requests.Session(), None):
+        if session is not None:
+            session.trust_env = False
+        try:
+            client = session or requests
+            data = client.get(url, params=params, timeout=15).json()
+            klines = (data.get("data") or {}).get("klines") or []
+            rows = [k.split(",") for k in klines]
+            if rows:
+                break
+        except Exception:
+            continue
+    if not rows:
+        raise VendorUnavailableError(f"eastmoney returned no kline rows for {symbol}")
+    df = pd.DataFrame(rows, columns=["Date", "Open", "Close", "High", "Low", "Volume",
+                                     "amount", "amplitude", "change_percent", "change", "turnover"])
+    return _finalize(df, symbol, to_sina(symbol))
 
 
 def _fetch_sina(symbol: str, start_date: str, end_date: str, adjust: str) -> pd.DataFrame:
@@ -172,11 +237,15 @@ def _fetch_tushare(symbol: str, start_date: str, end_date: str, adjust: str) -> 
     return _finalize(df, symbol, ts_code)
 
 
-# Ordered (name, fetcher) chain. tushare is attempted last because it requires
-# a token and raises AShareNotConfiguredError when unset, which the chain treats
-# as "skip", not "fail".
+# Ordered (name, fetcher) chain. sina first: it is stable and direct-reachable,
+# so the common path never pays for a probe of a source that may be blocked.
+# eastmoney follows (richest fields, but SNI-blocked on some networks — tried
+# direct then via the system proxy). tushare is attempted last because it
+# requires a token and raises AShareNotConfiguredError when unset, which the
+# chain treats as "skip".
 _CHAIN = (
     ("sina", _fetch_sina),
+    ("eastmoney", _fetch_eastmoney),
     ("tencent", _fetch_tencent),
     ("baostock", _fetch_baostock),
     ("tushare", _fetch_tushare),

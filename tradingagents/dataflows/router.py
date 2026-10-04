@@ -17,6 +17,13 @@ from tradingagents.dataflows.vendors.alpha_vantage import (
     get_news as get_alpha_vantage_news,
     get_stock as get_alpha_vantage_stock,
 )
+from tradingagents.dataflows.vendors.ashare.fundamentals import (
+    get_balance_sheet as get_ashare_balance_sheet,
+    get_cashflow as get_ashare_cashflow,
+    get_fundamentals as get_ashare_fundamentals,
+    get_income_statement as get_ashare_income_statement,
+    get_insider_transactions as get_ashare_insider_transactions,
+)
 from tradingagents.dataflows.vendors.ashare.market import (
     get_indicators as get_ashare_indicators,
     get_stock_data as get_ashare_stock_data,
@@ -169,6 +176,11 @@ def get_category_for_method(method: str) -> str:
 _ASHARE_METHODS = {
     "get_stock_data": get_ashare_stock_data,
     "get_indicators": get_ashare_indicators,
+    "get_fundamentals": get_ashare_fundamentals,
+    "get_balance_sheet": get_ashare_balance_sheet,
+    "get_cashflow": get_ashare_cashflow,
+    "get_income_statement": get_ashare_income_statement,
+    "get_insider_transactions": get_ashare_insider_transactions,
 }
 
 
