@@ -17,6 +17,7 @@ import streamlit as st
 from tradingagents.default_config import DEFAULT_CONFIG
 from tradingagents.llm_clients.model_catalog import get_model_options
 from web.utils.api_checker import check_api_keys, get_api_key_status_message
+from web.utils.model_list import fetch_zhipu_models
 
 # A web-side pseudo-provider: the GLM Coding Plan key only has quota on the
 # Anthropic-compatible endpoint, so this choice maps to provider "anthropic"
@@ -48,8 +49,15 @@ def _default_provider_choice() -> str:
 
 
 def _model_pick(provider: str, mode: str, current: str) -> str:
-    """A selectbox over surgo's catalog, falling back to free-text custom."""
-    options = get_model_options(provider, mode)
+    """A selectbox over the model options, falling back to free-text custom.
+
+    GLM-family providers use Zhipu's official live model listing (newest
+    first, cached an hour) instead of the static catalog; the static catalog
+    remains the fallback when the listing endpoint is unreachable.
+    """
+    options = _glm_live_options(mode) if provider.startswith("glm") else get_model_options(provider, mode)
+    if not options:
+        options = [("Custom model ID", "custom")]
     labels = {value: label for label, value in options}
     default = current if current in labels else (
         "custom" if any(v == "custom" for _, v in options) else options[0][1]
@@ -65,6 +73,27 @@ def _model_pick(provider: str, mode: str, current: str) -> str:
     if value == "custom":
         return st.text_input("自定义模型 ID", value=current, key=f"sb_custom_{mode}")
     return value
+
+
+def _glm_live_options(mode: str) -> list[tuple[str, str]]:
+    """(label, value) pairs from Zhipu's official listing; [] on failure.
+
+    The currently configured model is kept selectable even if the listing
+    no longer contains it.
+    """
+    from tradingagents.default_config import DEFAULT_CONFIG
+
+    current = DEFAULT_CONFIG["quick_think_llm"] if mode == "quick" else DEFAULT_CONFIG["deep_think_llm"]
+    models = fetch_zhipu_models()
+    options = [(f'{m.get("display_name") or m["id"]}（{m["id"]}）', m["id"]) for m in models]
+    if current and current not in {v for _, v in options}:
+        options.append((f"{current}（当前配置）", current))
+    options.append(("Custom model ID", "custom"))
+    if models:
+        st.caption("✅ 模型列表来自智谱官方接口（缓存 1 小时，新模型在前）")
+    else:
+        st.caption("⚠️ 智谱官方模型接口不可达，使用内置目录")
+    return options
 
 
 def render_sidebar() -> dict:
