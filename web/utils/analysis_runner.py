@@ -86,6 +86,7 @@ def build_engine_config(
     deep_model: str | None,
     backend_url: str | None,
     research_depth: int,
+    output_language: str = "English",
 ) -> dict:
     """surgo DEFAULT_CONFIG + the web form's overrides."""
     config = dict(DEFAULT_CONFIG)
@@ -97,6 +98,8 @@ def build_engine_config(
     debate, risk = _DEPTH_ROUNDS.get(int(research_depth), (1, 1))
     config["max_debate_rounds"] = debate
     config["max_risk_discuss_rounds"] = risk
+    if output_language:
+        config["output_language"] = output_language
     return config
 
 
@@ -107,6 +110,7 @@ def run_stock_analysis(
     deep_model: str | None = None,
     backend_url: str | None = None,
     progress_callback=None,
+    output_language: str = "English",
 ) -> dict:
     """Run one full surgo analysis; returns a uniform results envelope.
 
@@ -141,7 +145,10 @@ def run_stock_analysis(
         update("初始化分析引擎", "init_engine")
         from tradingagents.graph.trading_graph import TradingAgentsGraph
 
-        config = build_engine_config(llm_provider, llm_model, deep_model, backend_url, base["research_depth"])
+        config = build_engine_config(
+            llm_provider, llm_model, deep_model, backend_url,
+            base["research_depth"], output_language,
+        )
         symbol = normalize_symbol(base["stock_symbol"], base["market_type"])
 
         # The tracker ref (if any) powers the live LLM-call counter.

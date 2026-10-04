@@ -95,6 +95,7 @@ def _spawn_analysis(form_data: dict, sidebar_cfg: dict):
                 progress_callback=lambda message, stage=None: tracker.update_progress(
                     message=message, stage=stage
                 ),
+                output_language=sidebar_cfg.get("output_language", "English"),
             )
             tracker.mark_completed(results)
         except Exception as exc:  # never leave the tracker stuck in "running"

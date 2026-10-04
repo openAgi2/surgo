@@ -123,6 +123,31 @@ def render_sidebar() -> dict:
             req = "必填" if info["required"] else "可选"
             st.caption(f"{mark} `{var}`（{req}）{info['description']}")
 
+    # -- 输出语言 ----------------------------------------------------------------
+    with st.sidebar.expander("🌐 输出语言", expanded=False):
+        _LANGS = {"English": "English", "Chinese": "中文 (Chinese)", "Japanese": "日本語",
+                  "Korean": "한국어", "custom": "自定义…"}
+        current_lang = st.session_state.get("sb_language", DEFAULT_CONFIG["output_language"])
+        if current_lang not in _LANGS:  # an env-configured custom language
+            _LANGS[current_lang] = current_lang
+        lang_pick = st.selectbox(
+            "报告输出语言",
+            options=list(_LANGS),
+            index=list(_LANGS).index(current_lang),
+            format_func=lambda v: _LANGS[v],
+            key="sb_language_pick",
+            help="影响所有分析师报告与最终决策的语言；.env 里 TRADINGAGENTS_OUTPUT_LANGUAGE 是持久配置",
+        )
+        if lang_pick == "custom":
+            output_language = st.text_input(
+                "语言名称（如 Turkish、Vietnamese）",
+                value=current_lang if current_lang != "English" else "",
+                key="sb_language_custom",
+            ) or "English"
+        else:
+            output_language = lang_pick
+        st.session_state["sb_language"] = output_language
+
     # -- 系统信息 ---------------------------------------------------------------
     with st.sidebar.expander("ℹ️ 系统信息", expanded=False):
         try:
@@ -138,4 +163,5 @@ def render_sidebar() -> dict:
         "llm_model": quick,
         "deep_model": deep,
         "backend_url": backend or default_backend,
+        "output_language": output_language,
     }
