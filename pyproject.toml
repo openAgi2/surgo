@@ -45,6 +45,7 @@ dependencies = [
     "tushare>=1.4.0",
     "typing-extensions>=4.14.0",
     "yfinance>=1.7.0",
+    "streamlit>=1.65.0",
 ]
 
 [project.optional-dependencies]
@@ -66,12 +67,13 @@ Issues = "https://github.com/openAgi2/surgo/issues"
 
 [project.scripts]
 surgo = "cli.main:app"
+surgo-web = "web.run_web:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "tradingagents.__version__"}
 
 [tool.setuptools.packages.find]
-include = ["tradingagents*", "cli*"]
+include = ["tradingagents*", "cli*", "web*"]
 
 [tool.setuptools.package-data]
 cli = ["static/*"]

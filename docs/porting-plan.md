@@ -142,6 +142,45 @@
   - 实测：600519/300750 个股新闻可取（真实文章）；中文宏观快讯可取（商务部 G20 答记者问等）；
     AAPL get_news/get_global_news 仍走 yfinance 无回归；ruff 通过；无 app/core 依赖
 
+### M6 — Web UI（移植 CN 历史 Apache web/）✅ 已完成
+- [x] 源调研与合法性确认
+  - CN 现行 LICENSE 为混合授权：`app/`、`frontend/`、`core/` 专有（禁再分发），
+    但 git 历史 `5a143f44^` 处存在已删除的 `web/` Streamlit 应用（40 文件），
+    其存在期间的 LICENSE 写明「除 app/ 和 frontend/ 外全部 Apache-2.0」，
+    现行 LICENSE 亦仍把 `web/` 列在 Apache 部分。Apache-2.0 §3 授权不可撤销
+    （irrevocable），从历史提交检出合法。该树经 git grep 验证**零 app/core 依赖**，
+    引擎调用 `TradingAgentsGraph(...).propagate(...)` 与 surgo 完全同构
+  - 三个并行调研 agent 完成全树耦合分析：认证为浅耦合（early-return 门 +
+    单行守卫）、Redis/Mongo 均为可选层、引擎耦合集中在 `analysis_runner` 单点
+- [x] 移植与裁剪（`web/` 包，9 个文件）
+  - **PORT**：app.py 骨架（CSS/后台线程/进度轮询）、analysis_form（市场选择 +
+    代码归一化 + 6 分析师勾选）、results_display（九页签渲染 + 下载）、
+    header、async_progress_tracker（纯文件存储版，Redis 路径砍除）、
+    thread 安全设计
+  - **TRIM**：analysis_runner（砍 CN provider 阶梯/token 追踪/演示结果
+    ~390 死行；config 键换成 surgo 的 DEFAULT_CONFIG + 深度→辩论轮数映射；
+    decision 处理改为 surgo 纯字符串评级——**不合成置信度/风险分**，目标价
+    用正则从组合经理决策文本的标注行提取，是抽取不是伪造）、
+    api_checker（键表换成 surgo `api_key_env` 单一事实源）、sidebar
+    （CN 硬编码模型目录换成 surgo `model_catalog`，会话级覆盖 + .env 持久）、
+    run_web（极简启动器）
+  - **DROP**：login.py、auth/权限、用户活动记录、MongoDB 历史、Redis 会话、
+    历史浏览页（analysis_results.py，1805 行，Mongo 依赖 + 状态键已过期）、
+    进度日志处理器（依赖 CN 引擎的 `[模块开始]` 中文日志标记，surgo 不产）
+  - 进度模型按外部可观测的真实阶段收敛（校验→初始化→运行→报告），运行期
+    用 LangChain callback 计数 LLM 调用驱动启发式进度（标注为预估值），
+    不伪造引擎内部阶段
+- [x] 集成
+  - `pyproject.toml`：streamlit 依赖、`surgo-web` 入口、包发现加 `web*`
+  - `tradingagents/reporting.py`：报告树补收 M4 的 index/sector 报告段
+  - NOTICE 第 2 条补 `web/` 来源声明；每个移植文件头部按 Apache-2.0 §4 标注
+    来源、原作者版权与修改说明
+- [x] 验收
+  - ruff 全过；模块导入/参数校验/代码归一化/配置构建/目标价抽取/tracker
+    往返全部通过；Streamlit headless 启动 HTTP 200 + health ok；
+    经 `run_stock_analysis` 接缝跑真实 GLM 分析（600519 @ 2024-09-30，
+    market+index+sector）产出完整信封与报告树
+
 ## 验收标准（每个 milestone）
 
 - 引擎可运行：`surgo --ticker 600519 --date <D>` 产出完整研究报告

@@ -24,10 +24,13 @@ projects. Both are licensed under the Apache License, Version 2.0.
    Copyright (c) hsliuping and TradingAgents-CN contributors.
    surgo draws on the Apache-2.0-licensed open-source engine of
    TradingAgents-CN (its `tradingagents/` directory) for A-share market
-   adaptation. Only the Apache-2.0-licensed components of TradingAgents-CN
-   are used; the proprietary components of that project (its `app/`,
-   `frontend/`, and `core/` directories) are NOT used, copied, or
-   redistributed here.
+   adaptation, and on its Apache-2.0-licensed `web/` Streamlit component
+   (a historical revision, later removed upstream) for the `web/` UI, which
+   surgo has modified per Apache-2.0 §4 (modifications are marked in each
+   file's header). Only the Apache-2.0-licensed components of
+   TradingAgents-CN are used; the proprietary components of that project
+   (its `app/`, `frontend/`, and `core/` directories) are NOT used, copied,
+   or redistributed here.
 
 The full text of the Apache License, Version 2.0, is in the LICENSE file.
 The upstream TradingAgents license is preserved in

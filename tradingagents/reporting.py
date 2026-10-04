@@ -58,6 +58,14 @@ def write_report_tree(final_state: dict, ticker: str, save_path, settings: dict 
         analysts_dir.mkdir(exist_ok=True)
         (analysts_dir / "fundamentals.md").write_text(final_state["fundamentals_report"], encoding="utf-8")
         analyst_parts.append(("Fundamentals Analyst", final_state["fundamentals_report"]))
+    if final_state.get("index_report"):
+        analysts_dir.mkdir(exist_ok=True)
+        (analysts_dir / "index.md").write_text(final_state["index_report"], encoding="utf-8")
+        analyst_parts.append(("Index Analyst (A-share)", final_state["index_report"]))
+    if final_state.get("sector_report"):
+        analysts_dir.mkdir(exist_ok=True)
+        (analysts_dir / "sector.md").write_text(final_state["sector_report"], encoding="utf-8")
+        analyst_parts.append(("Sector Analyst (A-share)", final_state["sector_report"]))
     if analyst_parts:
         content = "\n\n".join(f"### {name}\n{text}" for name, text in analyst_parts)
         sections.append(f"## I. Analyst Team Reports\n\n{content}")
