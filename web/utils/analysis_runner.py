@@ -190,6 +190,14 @@ def run_stock_analysis(
                 "套餐 key：请在侧边栏选「GLM Coding Plan」提供商（走 Anthropic "
                 "兼容端点），标准 OpenAI 端点对套餐 key 不开放。"
             )
+        elif "1301" in message and "sensitive" in message.lower():
+            # Zhipu platform-side content moderation, not a surgo bug: it
+            # fires on some Chinese news-heavy prompts / generations and is
+            # partly stochastic. Say so and give the working combinations.
+            message += (
+                " —— 智谱平台内容风控(1301)拦截了本次生成，多为中文新闻语料或特定模型触发。"
+                "可重试一次（有随机性）、改用 glm-5.1（目前实测最稳），或把输出语言换成 English。"
+            )
         return {
             **base,
             "success": False,
