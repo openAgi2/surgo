@@ -116,7 +116,8 @@ def backtest(
     """Score past decisions over a grid of tickers and dates."""
 
     try:
-        dates = iter_grid(start, end, every)
+        grid_tickers = [t.strip() for t in tickers.split(",") if t.strip()]
+        dates = iter_grid(start, end, every, tickers=grid_tickers)
         book = load_portfolio(portfolio) if portfolio else None
         kind = AssetType(asset_type.strip().lower())
         # The analysts are named and checked as for an analysis; without a

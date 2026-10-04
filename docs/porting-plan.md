@@ -20,20 +20,47 @@
 
 ## 移植路线（建议按序）
 
-### M1 — A 股行情 vendor
-- [ ] 研究原版 vendor 抽象：`tradingagents/dataflows/vendors/`（`router.py` / `base`）
-- [ ] 从 CN `tradingagents/dataflows/` 提取 tushare/akshare/baostock 的行情获取逻辑
+### M1 — A 股行情 vendor ✅ 已完成（数据层验证通过）
+- [x] 研究原版 vendor 抽象：`tradingagents/dataflows/vendors/`（`router.py` / `base`）
+- [x] 从 CN `tradingagents/dataflows/` 提取 tushare/akshare/baostock 的行情获取逻辑
   （日线、实时快照、指数、板块），剥离其对 `app/`/`core/` 的依赖
-- [ ] 在 surgo 引擎内实现为新的 vendor 模块：`tradingagents/dataflows/vendors/ashare/`
-  - [ ] `tushare_client.py`（日线/财务/基本面）
-  - [ ] `akshare_client.py`（实时/新闻/板块）
-  - [ ] `baostock_client.py`（历史行情备选）
-- [ ] 接入原版 vendor 注册表，使 `--ticker 600519` 走 A 股 vendor
-- [ ] 依赖：在 `pyproject.toml` 增加 `tushare` / `akshare` / `baostock`
+- [x] 在 surgo 引擎内实现为新的 vendor 模块：`tradingagents/dataflows/vendors/ashare/`
+  （clean-room 重写，实际文件：`symbols.py` 代码识别、`common.py` 降级链、
+  `ohlcv.py` 日线加载、`market.py` 工具函数 + 指数 `get_closes`）
+  - [x] 降级链 sina → tencent → baostock → tushare（eastmoney 不可达故排除；tushare 需 `TUSHARE_TOKEN`，可选）
+  - [x] 复权 `qfq`（对齐原版 `auto_adjust=True` 语义）
+- [x] 接入原版 vendor 注册表：`router.py` 对 A 股符号短路到 ashare（`get_stock_data`/`get_indicators`），
+  `snapshot.py` 与 `memory/settlement.py` 按市场分发；benchmark 加 `.SH`→`000001.SH` 映射
+- [x] 依赖：在 `pyproject.toml` 增加 `tushare` / `akshare` / `baostock`
 
-### M2 — A 股代码与交易日历
-- [ ] A 股代码识别与归一化（`600519.SH` / `000001.SZ` / 6 位简码）
-- [ ] A 股交易日历（用于 point-in-time 与回测网格，替换原版美股日历假设）
+> M1 范围说明（按 handoff 退路收紧）：只做行情 + 技术指标 + 回测结算数据路径。
+> 基本面/财务（M3）、中文新闻（M5）、实时快照工具未实现，A 股符号调用这些方法时
+> 走既有链或返回明确 sentinel，不伪造数据。数据层已端到端验证（600519/000001.SZ/300750
+> 均可取数、point-in-time 过滤正确、指标计算正确、AAPL 无回归）；完整 `surgo --ticker
+> 600519 --date <D>` 报告需配置 LLM API key 后运行。
+
+> **eastmoney 为何被排除（不要踩第二次，2026-10-04 实测）**：akshare 默认的
+> A 股日线源 eastmoney（`push2his.eastmoney.com` / `push2.eastmoney.com` 的
+> `/api/qt/stock/kline/get`）在开发机上**不可达，且不是代理配置能稳定解决的**。
+> 诊断结论：TCP 握手 ✅、TLS 握手 ✅（证书正常下发）、HTTP 响应 ❌（发出后 0 字节返回）
+> —— 典型的 **SNI 级阻断**（在 TLS ClientHello 看到 `eastmoney.com` 相关 SNI 即断流）。
+> 同一 CDN 的 `82.push2.eastmoney.com/api/qt/clist/get` 偶发返回 200，是 fake-IP 恰好走
+> 了某个能通的境外中转节点，重试即失败、不可依赖。**DIRECT 规则救不了它**（SNI 拦截在
+> 直连路径上同样生效）。因此降级链定为 sina → tencent → baostock → tushare，全部实测可达、
+> 无需代理。若后续要把 eastmoney 加回首选，前提是其代理节点已调稳，否则会给链上引入
+> 一个必败且拖慢整条链的源。
+
+### M2 — A 股代码与交易日历 ✅ 已完成
+- [x] A 股代码识别与归一化（`600519.SH` / `000001.SZ` / 6 位简码）— 在 M1 `vendors/ashare/symbols.py` 落地
+- [x] A 股交易日历（用于 point-in-time 与回测网格，替换原版美股日历假设）
+  - 新增 `tradingagents/calendar.py`：A 股用 sina 交易日历（`tool_trade_date_hist_sina`，8797 天，
+    1990→2026，正确排除国庆/周末），缓存到 `data_cache_dir`（TTL 7 天）；其他市场回退「周一到周五」
+    近似（美股无现成日历源，不改其行为）
+  - 回测网格：`iter_grid(..., tickers=...)` 对**纯 A 股**网格按交易日重排 cell（`filter_trading_days`
+    把非交易日 cell 换到最近一个交易日并去重）；美股/混合网格维持原 every-day 行为（只做加法）
+  - 单日运行（`_validate_trade_date`）不改：A 股非交易日自然取最近一根 bar，stale guard 兜底，
+    与美股周末行为一致
+  - 实测：2025 国庆假期（10-01..10-08）全部正确判为非交易日，grid 从 15 天收敛到 5 个交易日
 
 ### M3 — A 股基本面与财务
 - [ ] 财务三表 / 主要指标（替代 SEC EDGAR 路径）

@@ -17,7 +17,26 @@ from stockstats import wrap
 
 from tradingagents.dataflows.errors import NoMarketDataError
 from tradingagents.dataflows.symbols import normalize_symbol
+from tradingagents.dataflows.vendors.ashare.ohlcv import load_ohlcv as load_ohlcv_ashare
+from tradingagents.dataflows.vendors.ashare.symbols import is_ashare, normalize_ashare
 from tradingagents.dataflows.vendors.yahoo.ohlcv import load_ohlcv
+
+
+def _load_ohlcv_for(symbol: str, as_of_date: str, fill_gaps: bool) -> pd.DataFrame:
+    """Dispatch to the loader that covers ``symbol``'s market.
+
+    A-share symbols are served by the A-share upstream chain; everything else
+    uses the Yahoo loader. The snapshot is a verification path, so it must read
+    from the same source the rest of the run priced the instrument with.
+    """
+    if is_ashare(symbol):
+        return load_ohlcv_ashare(symbol, as_of_date, fill_gaps=fill_gaps)
+    return load_ohlcv(symbol, as_of_date, fill_gaps=fill_gaps)
+
+
+def _canonical(symbol: str) -> str:
+    """The canonical spelling of ``symbol`` for whichever market it trades in."""
+    return normalize_ashare(symbol) if is_ashare(symbol) else normalize_symbol(symbol)
 
 # A fixed, common indicator set so the snapshot is the same shape every run.
 DEFAULT_SNAPSHOT_INDICATORS: tuple[str, ...] = (
@@ -36,16 +55,16 @@ def _verified_rows(symbol: str, as_of_date: str) -> pd.DataFrame:
     """
     # As reported: this snapshot is quoted by the agents as exact prices, so a
     # gap-filled cell would put the previous session's number under this date.
-    data = load_ohlcv(symbol, as_of_date, fill_gaps=False)
+    data = _load_ohlcv_for(symbol, as_of_date, fill_gaps=False)
     if data is None or data.empty:
-        raise NoMarketDataError(symbol, normalize_symbol(symbol), "no price rows")
+        raise NoMarketDataError(symbol, _canonical(symbol), "no price rows")
 
     df = data.copy()
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
     df = df.dropna(subset=["Date"])
     df = df[df["Date"] <= pd.to_datetime(as_of_date)].sort_values("Date")
     if df.empty:
-        raise NoMarketDataError(symbol, normalize_symbol(symbol), f"no price rows on or before {as_of_date}")
+        raise NoMarketDataError(symbol, _canonical(symbol), f"no price rows on or before {as_of_date}")
     return df
 
 

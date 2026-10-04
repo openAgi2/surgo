@@ -22,10 +22,12 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
-# Dependencies track the vendored upstream engine (tradingagents/).
-# A-share data adapters (tushare/akshare/baostock) are added in a later
-# milestone; see docs/porting-plan.md.
+# Dependencies track the vendored upstream engine (tradingagents/), plus the
+# A-share data adapters (tushare/akshare/baostock) for the ashare vendor; see
+# docs/porting-plan.md.
 dependencies = [
+    "akshare>=1.19.0",
+    "baostock>=0.9.0",
     "langchain-core>=1.6.5",
     "langchain-anthropic>=1.7.4",
     "langchain-google-genai>=4.4.0",
@@ -40,6 +42,7 @@ dependencies = [
     "rich>=14.0.0",
     "typer>=0.21.0",
     "stockstats>=0.6.5",
+    "tushare>=1.4.0",
     "typing-extensions>=4.14.0",
     "yfinance>=1.7.0",
 ]

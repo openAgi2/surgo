@@ -5,9 +5,22 @@ import logging
 from datetime import datetime, timedelta
 
 from tradingagents.dataflows.symbols import normalize_symbol
+from tradingagents.dataflows.vendors.ashare.market import get_closes as get_closes_ashare
+from tradingagents.dataflows.vendors.ashare.symbols import is_ashare
 from tradingagents.dataflows.vendors.yahoo.market import get_closes
 
 logger = logging.getLogger(__name__)
+
+
+def _get_closes(symbol: str, start_date: str, end_date: str):
+    """Closes from the loader that covers ``symbol``'s market.
+
+    A-share symbols (including the mainland composite indices used as their
+    benchmark) are priced by the A-share vendor; everything else by Yahoo.
+    """
+    if is_ashare(symbol):
+        return get_closes_ashare(symbol, start_date, end_date)
+    return get_closes(symbol, start_date, end_date)
 
 
 def resolve_benchmark(ticker: str, config: dict) -> str:
@@ -15,9 +28,11 @@ def resolve_benchmark(ticker: str, config: dict) -> str:
 
     ``config["benchmark_ticker"]`` overrides everything when set; otherwise
     the suffix map matches the ticker's exchange suffix (e.g. ``.T`` for
-    Tokyo). US-listed tickers without a dotted suffix fall through to the
-    empty-suffix entry (SPY by default). Unrecognised suffixes, including
-    US tickers with dots like ``BRK.B``, also take the empty-suffix entry.
+    Tokyo). A-share tickers are matched on their canonical ``.SH``/``.SZ``
+    spelling, and a bare six-digit code resolves to Shanghai. US-listed
+    tickers without a dotted suffix fall through to the empty-suffix entry
+    (SPY by default). Unrecognised suffixes, including US tickers with dots
+    like ``BRK.B``, also take the empty-suffix entry.
     Returns are compared as percentages, each in its own currency.
     """
 
@@ -27,6 +42,16 @@ def resolve_benchmark(ticker: str, config: dict) -> str:
         # no prices, and the decision would stay pending for good.
         return normalize_symbol(explicit)
     benchmark_map = config.get("benchmark_map", {})
+    if is_ashare(ticker):
+        # Canonicalize to ``.SH``/``.SZ`` so the suffix map matches an A-share
+        # code regardless of which spelling the user typed.
+        from tradingagents.dataflows.vendors.ashare.symbols import normalize_ashare
+
+        canonical = normalize_ashare(ticker)
+        for suffix, benchmark in benchmark_map.items():
+            if suffix and canonical.endswith(suffix.upper()):
+                return benchmark
+        return benchmark_map.get(".SH", "000001.SH")
     ticker_upper = normalize_symbol(ticker)
     for suffix, benchmark in benchmark_map.items():
         if suffix and ticker_upper.endswith(suffix.upper()):
@@ -70,10 +95,10 @@ def fetch_returns(
         end_str = end.strftime("%Y-%m-%d")
 
         # Closes for the instrument the analysis priced (XAUUSD -> GC=F, #984).
-        stock = _by_day(get_closes(ticker, trade_date, end_str))
+        stock = _by_day(_get_closes(ticker, trade_date, end_str))
         # From a week earlier, so the benchmark has a close on or before entry.
         bench_start = (start - timedelta(days=7)).strftime("%Y-%m-%d")
-        bench = _by_day(get_closes(benchmark, bench_start, end_str))
+        bench = _by_day(_get_closes(benchmark, bench_start, end_str))
 
         # Require the full holding window to have traded. A rerun before it has
         # leaves the entry pending to retry next run, rather than settling on a

@@ -23,19 +23,28 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from tradingagents.agents.rating import RATING_REVIEW
+from tradingagents.calendar import filter_trading_days
 from tradingagents.dataflows.date_window import get_current_date
 from tradingagents.dataflows.symbols import safe_ticker_component
+from tradingagents.dataflows.vendors.ashare.symbols import is_ashare
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.memory import TradingMemoryLog
 
 logger = logging.getLogger(__name__)
 
 
-def iter_grid(start_date: str, end_date: str, every_n_days: int = 1) -> list[str]:
+def iter_grid(start_date: str, end_date: str, every_n_days: int = 1,
+              tickers: list[str] | None = None) -> list[str]:
     """Analysis dates from ``start_date``, never past today.
 
     A future date has no outcome to settle against, and the graph rejects one, so
     the grid stops at the present rather than producing cells that cannot score.
+
+    When ``tickers`` are all A-share, the dates are re-seated onto real trading
+    days (sina's calendar), so a sweep over mainland tickers schedules cells on
+    sessions the market actually opened instead of weekends and holidays. Other
+    sweeps keep the every-calendar-day grid: changing the US path's long-standing
+    behavior is out of scope, and its cells already tolerate non-trading days.
     """
     start, end = _canonical(start_date), _canonical(end_date)
     if every_n_days < 1:
@@ -48,6 +57,9 @@ def iter_grid(start_date: str, end_date: str, every_n_days: int = 1) -> list[str
     while cursor <= last:
         dates.append(cursor.strftime("%Y-%m-%d"))
         cursor += timedelta(days=every_n_days)
+
+    if tickers and all(is_ashare(t) for t in tickers):
+        dates = filter_trading_days(tickers[0], dates)
     return dates
 
 

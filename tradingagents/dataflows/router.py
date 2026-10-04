@@ -17,6 +17,11 @@ from tradingagents.dataflows.vendors.alpha_vantage import (
     get_news as get_alpha_vantage_news,
     get_stock as get_alpha_vantage_stock,
 )
+from tradingagents.dataflows.vendors.ashare.market import (
+    get_indicators as get_ashare_indicators,
+    get_stock_data as get_ashare_stock_data,
+)
+from tradingagents.dataflows.vendors.ashare.symbols import is_ashare
 from tradingagents.dataflows.vendors.fred import get_macro_data as get_fred_macro_data
 from tradingagents.dataflows.vendors.polymarket import (
     get_prediction_markets as get_polymarket_prediction_markets,
@@ -157,6 +162,16 @@ def get_category_for_method(method: str) -> str:
     raise ValueError(f"Method '{method}' not found in any category")
 
 
+# Methods served by the A-share vendor. Mainland listings are not covered by the
+# US vendors (yfinance/alpha_vantage/SEC EDGAR), so for an A-share symbol these
+# bypass the configured chain entirely — routing them to a US vendor would return
+# "no data" (or, worse, the wrong instrument) instead of a real answer.
+_ASHARE_METHODS = {
+    "get_stock_data": get_ashare_stock_data,
+    "get_indicators": get_ashare_indicators,
+}
+
+
 def get_vendor(category: str, method: str = None) -> str:
     """Get the configured vendor for a data category or specific tool method.
     Tool-level configuration takes precedence over category-level.
@@ -199,6 +214,17 @@ def no_data_available(error: NoMarketDataError) -> str:
 
 def route_to_vendor(method: str, *args, **kwargs):
     """Route method calls to appropriate vendor implementation with fallback support."""
+    # A-share symbols short-circuit to the A-share vendor for the methods it
+    # serves. The first positional argument is the symbol for every routed
+    # method, so this check needs no signature knowledge.
+    if method in _ASHARE_METHODS and args and is_ashare(args[0]):
+        try:
+            return _ASHARE_METHODS[method](*args, **kwargs)
+        except NoMarketDataError as e:
+            return no_data_available(e)
+        except VendorUnavailableError as e:
+            return vendor_unavailable(method, e)
+
     category = get_category_for_method(method)
     vendor_config = get_vendor(category, method)
     primary_vendors = [v.strip() for v in vendor_config.split(',')]
